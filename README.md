@@ -150,9 +150,11 @@ with zero effort. A workflow is already included at
    click **Run workflow** once to publish immediately.
 
 Your site goes live at `https://<your-username>.github.io/PutMaMoneyOnLowRSI/`
-and re-fetches every weekday at 22:00 UTC. Change the `cron:` line in the
-workflow to adjust the schedule; click **Run workflow** anytime for an on-demand
-refresh.
+and re-fetches **once per weekday at 11:00 AM US Eastern**, while the S&P market
+is open — plenty for a daily RSI screen. (GitHub's scheduler is UTC and ignores
+daylight saving, so the workflow lists both candidate hours and a gate job runs
+the deploy only when it's truly 11 AM in New York.) Click **Run workflow**
+anytime for an on-demand refresh.
 
 ### Option B — Any static host, manual data
 
