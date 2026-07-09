@@ -156,7 +156,28 @@ daylight saving, so the workflow lists both candidate hours and a gate job runs
 the deploy only when it's truly 11 AM in New York.) Click **Run workflow**
 anytime for an on-demand refresh.
 
-### Option B — Any static host, manual data
+### Option B — Vercel (auto-refreshing too)
+
+Vercel hosts the static site and auto-redeploys whenever the repo changes. The
+included workflow refreshes `data.js` at 11 AM ET and **commits it back to the
+repo**, which is exactly the signal Vercel redeploys on — so data stays fresh
+with no PC and no Vercel-side cron.
+
+1. Merge this branch into `main`.
+2. On [vercel.com](https://vercel.com): **Add New → Project → Import** your
+   GitHub repo.
+3. Framework preset: **Other**. Leave build command empty and output directory
+   as the repo root (there's no build step — it's plain HTML). Click **Deploy**.
+
+Vercel gives you a `https://<project>.vercel.app` URL. Every 11 AM data commit
+(and any manual **Run workflow**) triggers an automatic redeploy.
+
+> The workflow keeps deploying to GitHub Pages *as well*, so both hosts stay in
+> sync. If you only want Vercel, delete the `configure-pages` /
+> `upload-pages-artifact` / `deploy-pages` steps from
+> `.github/workflows/deploy.yml`.
+
+### Option C — Any static host, manual data
 
 Commit a `data.js` (run `python fetch_data.py` once, or ship the sample) and
 drop `index.html` + `data.js` onto **GitHub Pages, Netlify, Vercel, or
