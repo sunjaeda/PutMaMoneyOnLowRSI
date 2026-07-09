@@ -9,6 +9,41 @@ capitalization.
 
 ---
 
+## Quick start
+
+You need **Python 3** and internet access (on your own computer — not every
+network can reach Yahoo).
+
+```bash
+# 1. Install the two libraries the fetcher needs
+pip install yfinance pandas
+
+# 2. Pull data and generate data.js
+python fetch_data.py                 # keeps only RSI <= 30
+# or:
+python fetch_data.py --keep-all      # keep every ticker; filter live in the page
+
+# 3. Open the page — just double-click it, no server needed
+#    (index.html reads the data.js the script just wrote)
+```
+
+**Files:**
+
+| File | What it is |
+|---|---|
+| `index.html` | The page. Open it in any browser. Adjustable RSI slider, search, sort-by-column, "quality only" toggle. |
+| `fetch_data.py` | Fetches from Yahoo, computes RSI(14), writes `data.js`. |
+| `data.js` | The generated data (a sample ships in the repo so the page works before your first fetch). |
+
+**To refresh prices**, just re-run `python fetch_data.py` and reload the page.
+
+> Why the Python step? Browsers block direct calls to Yahoo Finance (CORS), and
+> Yahoo has no official public API. Letting a tiny script fetch the data — and
+> having the page read a local file — sidesteps all of that with zero servers to
+> run or deploy. See [Architecture](#architecture) for the alternatives.
+
+---
+
 ## Goal
 
 | Requirement | Detail |

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Low-RSI Stock Screener</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --green: #34c759;
+    --amber: #ff9f0a;
+    --red: #ff453a;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.25);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f6fa; --panel: #ffffff; --panel-2: #f7f9fc; --border: #e2e6ee;
+      --text: #1a1d24; --muted: #5c6675; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { margin-bottom: 20px; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.02em; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .disclaimer {
+    margin-top: 12px; font-size: 12.5px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--amber);
+    padding: 8px 12px; border-radius: 8px;
+  }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow); margin: 18px 0;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 4px; }
+  .ctl label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ctl .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=range] { width: 160px; accent-color: var(--accent); }
+  input[type=search], select {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px; font-size: 14px; outline: none;
+  }
+  input[type=search]:focus, select:focus { border-color: var(--accent); }
+  .chk { flex-direction: row; align-items: center; gap: 8px; }
+  .spacer { flex: 1; }
+  .count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  .table-scroll { overflow-x: auto; border-radius: 12px; box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); min-width: 720px; }
+  th, td { padding: 11px 14px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th {
+    position: sticky; top: 0; background: var(--panel-2); color: var(--muted);
+    font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+    border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+  }
+  thead th.sorted::after { content: attr(data-arrow); margin-left: 6px; color: var(--accent); }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--panel-2); }
+  .tk { font-weight: 700; }
+  .name { color: var(--muted); font-size: 13px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; min-width: 46px; text-align: center; padding: 3px 8px; border-radius: 999px; font-weight: 700; font-size: 13px; }
+  .rsi-low { background: rgba(52,199,89,.15); color: var(--green); }
+  .rsi-mid { background: rgba(255,159,10,.15); color: var(--amber); }
+  .rsi-high { background: rgba(255,69,58,.15); color: var(--red); }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .pill { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .empty { padding: 48px 16px; text-align: center; color: var(--muted); }
+  .empty code { background: var(--panel-2); padding: 2px 6px; border-radius: 6px; }
+  footer { margin-top: 18px; color: var(--muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Low-RSI Stock Screener</h1>
+    <div class="sub">Oversold candidates (14-day RSI) from Yahoo Finance, sorted by market cap.</div>
+    <div class="disclaimer">
+      <strong>Screening tool, not a buy signal.</strong> RSI ≤ 30 finds candidates — oversold stocks can keep falling.
+      Confirm with trend (200-day MA), volume, divergence, and fundamentals before acting. Not financial advice.
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="ctl">
+      <label>Max RSI(14) <span class="val" id="rsiVal">30</span></label>
+      <input type="range" id="rsiSlider" min="5" max="70" step="1" value="30" />
+    </div>
+    <div class="ctl">
+      <label for="search">Search</label>
+      <input type="search" id="search" placeholder="Ticker or name…" />
+    </div>
+    <div class="ctl chk">
+      <input type="checkbox" id="qualityOnly" />
+      <label for="qualityOnly" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--text)">
+        Quality only (price&nbsp;&gt;&nbsp;200-DMA)
+      </label>
+    </div>
+    <div class="spacer"></div>
+    <div class="count" id="count">—</div>
+  </div>
+
+  <div class="table-scroll">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th data-key="ticker">Ticker</th>
+          <th data-key="name">Company</th>
+          <th data-key="price">Price</th>
+          <th data-key="rsi">RSI(14)</th>
+          <th data-key="marketCap" class="sorted" data-arrow="▼">Market Cap</th>
+          <th data-key="pctVs200">vs 200-DMA</th>
+          <th data-key="sector">Sector</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div class="empty" id="empty" style="display:none"></div>
+
+  <footer>
+    <span id="meta"></span>
+    <span>RSI uses Wilder's 14-period smoothing.</span>
+  </footer>
+</div>
+
+<!-- Generated by fetch_data.py. If missing, the page shows a "no data" message. -->
+<script src="data.js"></script>
+<script>
+  // ---- helpers ----------------------------------------------------------
+  const fmtCap = (n) => {
+    if (n == null) return "—";
+    if (n >= 1e12) return "$" + (n / 1e12).toFixed(2) + "T";
+    if (n >= 1e9)  return "$" + (n / 1e9).toFixed(1) + "B";
+    if (n >= 1e6)  return "$" + (n / 1e6).toFixed(0) + "M";
+    return "$" + n.toLocaleString();
+  };
+  const fmtPrice = (n) => n == null ? "—" : "$" + n.toFixed(2);
+  const rsiClass = (r) => r <= 30 ? "rsi-low" : (r <= 50 ? "rsi-mid" : "rsi-high");
+
+  const state = {
+    maxRsi: 30,
+    query: "",
+    qualityOnly: false,
+    sortKey: "marketCap",
+    sortDir: -1, // -1 desc, 1 asc
+  };
+
+  const DATA = (window.STOCK_DATA && window.STOCK_DATA.stocks) || [];
+
+  // ---- rendering --------------------------------------------------------
+  function apply() {
+    let rows = DATA.filter(s => s.rsi <= state.maxRsi);
+    if (state.qualityOnly) rows = rows.filter(s => s.aboveMA200);
+    if (state.query) {
+      const q = state.query.toLowerCase();
+      rows = rows.filter(s =>
+        s.ticker.toLowerCase().includes(q) || (s.name || "").toLowerCase().includes(q));
+    }
+    const k = state.sortKey, d = state.sortDir;
+    rows.sort((a, b) => {
+      let av = a[k], bv = b[k];
+      if (typeof av === "string") return av.localeCompare(bv) * d;
+      av = av == null ? -Infinity : av; bv = bv == null ? -Infinity : bv;
+      return (av - bv) * d;
+    });
+
+    const tbody = document.getElementById("rows");
+    const empty = document.getElementById("empty");
+    document.getElementById("count").textContent =
+      rows.length + " match" + (rows.length === 1 ? "" : "es");
+
+    if (!DATA.length) {
+      tbody.innerHTML = "";
+      empty.style.display = "block";
+      empty.innerHTML = "No data loaded. Run <code>python fetch_data.py</code> to generate <code>data.js</code>, then reload.";
+      return;
+    }
+    if (!rows.length) {
+      tbody.innerHTML = "";
+      empty.style.display = "block";
+      empty.textContent = "No stocks match these filters. Try raising the Max RSI.";
+      return;
+    }
+    empty.style.display = "none";
+
+    tbody.innerHTML = rows.map(s => {
+      const pct = s.pctVs200;
+      const pctCell = pct == null ? "—"
+        : `<span class="${pct >= 0 ? "pos" : "neg"}">${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%</span>`;
+      return `<tr>
+        <td class="tk">${s.ticker}</td>
+        <td class="name">${s.name || ""}</td>
+        <td class="num">${fmtPrice(s.price)}</td>
+        <td class="num"><span class="badge ${rsiClass(s.rsi)}">${s.rsi.toFixed(1)}</span></td>
+        <td class="num">${fmtCap(s.marketCap)}</td>
+        <td class="num">${pctCell}</td>
+        <td><span class="pill">${s.sector || "—"}</span></td>
+      </tr>`;
+    }).join("");
+  }
+
+  // ---- wiring -----------------------------------------------------------
+  const slider = document.getElementById("rsiSlider");
+  slider.addEventListener("input", () => {
+    state.maxRsi = +slider.value;
+    document.getElementById("rsiVal").textContent = slider.value;
+    apply();
+  });
+  document.getElementById("search").addEventListener("input", (e) => {
+    state.query = e.target.value.trim(); apply();
+  });
+  document.getElementById("qualityOnly").addEventListener("change", (e) => {
+    state.qualityOnly = e.target.checked; apply();
+  });
+  document.querySelectorAll("thead th").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      if (state.sortKey === key) state.sortDir *= -1;
+      else { state.sortKey = key; state.sortDir = (key === "ticker" || key === "name" || key === "sector") ? 1 : -1; }
+      document.querySelectorAll("thead th").forEach(x => x.classList.remove("sorted"));
+      th.classList.add("sorted");
+      th.dataset.arrow = state.sortDir === -1 ? "▼" : "▲";
+      apply();
+    });
+  });
+
+  // meta line
+  if (window.STOCK_DATA) {
+    const d = window.STOCK_DATA;
+    document.getElementById("meta").textContent =
+      `Data generated ${d.generatedAt || "?"} · universe of ${d.universeSize ?? "?"} tickers.`;
+  }
+
+  apply();
+</script>
+</body>
+</html>
