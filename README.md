@@ -132,6 +132,40 @@ Market cap / summary fields come from the `quoteSummary` / `quote` endpoints.
 
 ---
 
+## Hosting it online (no PC, no Python on your side)
+
+The page is a static site, so any static host works. Two paths:
+
+### Option A — Auto-refreshing on GitHub Pages ⭐ (recommended)
+
+GitHub runs the fetcher for you on a schedule (free), so the data stays fresh
+with zero effort. A workflow is already included at
+`.github/workflows/deploy.yml`. To turn it on:
+
+1. **Merge this branch into `main`.** (Scheduled workflows only run on the
+   default branch.)
+2. In your repo on GitHub: **Settings → Pages → Build and deployment →
+   Source → "GitHub Actions".**
+3. Go to the **Actions** tab, open **"Refresh data & deploy to Pages"**, and
+   click **Run workflow** once to publish immediately.
+
+Your site goes live at `https://<your-username>.github.io/PutMaMoneyOnLowRSI/`
+and re-fetches every weekday at 22:00 UTC. Change the `cron:` line in the
+workflow to adjust the schedule; click **Run workflow** anytime for an on-demand
+refresh.
+
+### Option B — Any static host, manual data
+
+Commit a `data.js` (run `python fetch_data.py` once, or ship the sample) and
+drop `index.html` + `data.js` onto **GitHub Pages, Netlify, Vercel, or
+Cloudflare Pages** — all have free tiers. The data is frozen until you upload a
+new `data.js`. No servers, no build step.
+
+> Either way there is **no server to run** — the page only ever reads a static
+> `data.js`.
+
+---
+
 ## Displayed columns (proposed)
 
 | Column | Why it's there |

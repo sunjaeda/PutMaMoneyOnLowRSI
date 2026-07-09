@@ -1,0 +1,57 @@
+name: Refresh data & deploy to Pages
+
+# Runs the Python fetcher in GitHub's cloud (no PC needed), regenerates
+# data.js, and publishes index.html + data.js to GitHub Pages.
+
+on:
+  # Weekdays at 22:00 UTC (~after US market close). Adjust as you like.
+  schedule:
+    - cron: "0 22 * * 1-5"
+  # Lets you trigger a refresh manually from the Actions tab.
+  workflow_dispatch:
+  # Redeploy whenever you push site changes to the default branch.
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install yfinance pandas
+
+      - name: Fetch data & compute RSI
+        run: python fetch_data.py --keep-all
+
+      - name: Stage site files
+        run: |
+          mkdir -p _site
+          cp index.html data.js _site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
