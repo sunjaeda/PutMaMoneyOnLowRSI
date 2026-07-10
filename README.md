@@ -212,10 +212,14 @@ scanning, and the table sorts by score by default.
 
 | Input | Weight | Higher score when… |
 |---|---:|---|
-| RSI(14) | 40% | more oversold (RSI ~20 → full marks, ~40 → none) |
-| Trend vs 200-day MA | 30% | price is above the 200-DMA (a dip *within* an uptrend) |
-| Market cap | 20% | larger cap (log-scaled; less likely a value trap) |
+| RSI(14) | 40% | more oversold (RSI ~15 → full marks, ~40 → none) |
+| Market cap | 30% | larger cap (log-scaled; less likely a value trap) |
+| Trend vs 200-day MA | 20% | price is above the 200-DMA (a dip *within* an uptrend) |
 | Liquidity / volume | 10% | higher average volume (log-scaled; easier to trade) |
+
+**RSI hard floor:** below **RSI 15**, deeper oversold gives *no* extra credit —
+a guard so a falling knife (RSI 8, still collapsing) can't out-score a healthy
+dip. Set by `RSI_FLOOR` in `index.html`.
 
 Missing inputs are dropped and the remaining weights re-normalized. The weights
 and tier cut-offs live in `scoreStock()` / `tierOf()` in `index.html` — tweak
