@@ -189,21 +189,37 @@ new `data.js`. No servers, no build step.
 
 ---
 
-## Displayed columns (proposed)
+## Displayed columns
 
 | Column | Why it's there |
 |---|---|
 | Ticker | Identity |
 | Company name | Readability |
+| **Attractiveness** | Color-graded 0–100 score (see below); the default sort |
 | Price | Context |
 | RSI(14) | The core signal |
-| Market cap | The sort key |
+| Market cap | A scoring input; click to sort by it |
 | % vs 200-day MA | Is the dip *within an uptrend*? (quality oversold) |
-| Volume | Capitulation vs. quiet grind |
 | Sector | Spot sector-wide selloffs |
 
-The last three are optional for v1 but are what turn a raw list into a *usable*
-watchlist — see the notes below.
+## Attractiveness score
+
+Each stock gets a transparent, weighted **0–100 score** rendered as a
+color-graded tier — **Strong** (green) / **Fair** (amber) / **Weak** (orange) /
+**Poor** (red) — with the tier label and number always shown, so meaning never
+depends on color alone. Rows are also striped on the left edge by tier for quick
+scanning, and the table sorts by score by default.
+
+| Input | Weight | Higher score when… |
+|---|---:|---|
+| RSI(14) | 40% | more oversold (RSI ~20 → full marks, ~40 → none) |
+| Trend vs 200-day MA | 30% | price is above the 200-DMA (a dip *within* an uptrend) |
+| Market cap | 20% | larger cap (log-scaled; less likely a value trap) |
+| Liquidity / volume | 10% | higher average volume (log-scaled; easier to trade) |
+
+Missing inputs are dropped and the remaining weights re-normalized. The weights
+and tier cut-offs live in `scoreStock()` / `tierOf()` in `index.html` — tweak
+them freely. **It's a heuristic to rank a watchlist, not a buy signal.**
 
 ---
 

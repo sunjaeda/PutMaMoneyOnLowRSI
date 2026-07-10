@@ -60,7 +60,8 @@
   .table-scroll { overflow-x: auto; border-radius: 12px; box-shadow: var(--shadow); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); min-width: 720px; }
   th, td { padding: 11px 14px; text-align: right; white-space: nowrap; }
-  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2),
+  th:nth-child(3), td:nth-child(3) { text-align: left; }
   thead th {
     position: sticky; top: 0; background: var(--panel-2); color: var(--muted);
     font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
@@ -80,6 +81,26 @@
   .pos { color: var(--green); }
   .neg { color: var(--red); }
   .pill { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+
+  /* Attractiveness tiers — fixed status palette (validated), never themed.
+     Meaning is carried by the label + score too, never color alone. */
+  .tier-strong { --tc: #0ca30c; }   /* good     */
+  .tier-fair   { --tc: #fab219; }   /* warning  */
+  .tier-weak   { --tc: #ec835a; }   /* serious  */
+  .tier-poor   { --tc: #d03b3b; }   /* critical */
+  td:first-child { border-left: 4px solid var(--tc, transparent); }
+  .tier { display: inline-flex; align-items: center; gap: 8px; }
+  .tier .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tc); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc) 18%, transparent); }
+  .tier .lbl { font-weight: 700; }
+  .tier .sc { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+  .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: -4px 0 16px; font-size: 12.5px; color: var(--muted); }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  details.how { margin: -6px 0 16px; font-size: 12.5px; color: var(--muted); }
+  details.how summary { cursor: pointer; color: var(--accent); width: fit-content; }
+  details.how ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.7; }
+  details.how b { color: var(--text); }
   .empty { padding: 48px 16px; text-align: center; color: var(--muted); }
   .empty code { background: var(--panel-2); padding: 2px 6px; border-radius: 6px; }
   footer { margin-top: 18px; color: var(--muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
@@ -89,7 +110,7 @@
 <div class="wrap">
   <header>
     <h1>Low-RSI Stock Screener</h1>
-    <div class="sub">Oversold candidates (14-day RSI) from Yahoo Finance, sorted by market cap.</div>
+    <div class="sub">Oversold candidates (14-day RSI) from Yahoo Finance, ranked by an attractiveness score.</div>
     <div class="disclaimer">
       <strong>Screening tool, not a buy signal.</strong> RSI ≤ 30 finds candidates — oversold stocks can keep falling.
       Confirm with trend (200-day MA), volume, divergence, and fundamentals before acting. Not financial advice.
@@ -115,15 +136,36 @@
     <div class="count" id="count">—</div>
   </div>
 
+  <div class="legend">
+    <span>Attractiveness:</span>
+    <span class="key"><span class="swatch" style="background:#0ca30c"></span>Strong (70–100)</span>
+    <span class="key"><span class="swatch" style="background:#fab219"></span>Fair (50–69)</span>
+    <span class="key"><span class="swatch" style="background:#ec835a"></span>Weak (30–49)</span>
+    <span class="key"><span class="swatch" style="background:#d03b3b"></span>Poor (0–29)</span>
+  </div>
+
+  <details class="how">
+    <summary>How the attractiveness score works</summary>
+    <ul>
+      <li><b>RSI (40%)</b> — more oversold scores higher (RSI 20 → full marks, 40 → none).</li>
+      <li><b>Trend vs 200-day MA (30%)</b> — a dip <em>within</em> an uptrend (price above the 200-DMA) mean-reverts more reliably, so it scores higher.</li>
+      <li><b>Market cap (20%)</b> — larger caps are less likely to be value traps (log-scaled).</li>
+      <li><b>Liquidity / volume (10%)</b> — higher average volume is easier to trade (log-scaled).</li>
+    </ul>
+    <p style="margin:8px 0 0">A weighted blend, 0–100. Missing inputs are dropped and the rest re-weighted.
+    This is a heuristic to rank a watchlist — <b>not</b> a buy signal or price target.</p>
+  </details>
+
   <div class="table-scroll">
     <table id="tbl">
       <thead>
         <tr>
           <th data-key="ticker">Ticker</th>
           <th data-key="name">Company</th>
+          <th data-key="score" class="sorted" data-arrow="▼">Attractiveness</th>
           <th data-key="price">Price</th>
           <th data-key="rsi">RSI(14)</th>
-          <th data-key="marketCap" class="sorted" data-arrow="▼">Market Cap</th>
+          <th data-key="marketCap">Market Cap</th>
           <th data-key="pctVs200">vs 200-DMA</th>
           <th data-key="sector">Sector</th>
         </tr>
@@ -153,16 +195,40 @@
   };
   const fmtPrice = (n) => n == null ? "—" : "$" + n.toFixed(2);
   const rsiClass = (r) => r <= 30 ? "rsi-low" : (r <= 50 ? "rsi-mid" : "rsi-high");
+  const clamp = (x) => Math.max(0, Math.min(100, x));
+
+  // ---- attractiveness score (0–100) -------------------------------------
+  // A transparent weighted blend of the indicators. Each sub-score is 0–100;
+  // any missing input is dropped and the remaining weights re-normalized.
+  function scoreStock(s) {
+    const parts = []; // [weight, subScore]
+    if (s.rsi != null)                       parts.push([0.40, clamp((40 - s.rsi) / 20 * 100)]);          // RSI 20→100, 40→0
+    if (s.pctVs200 != null)                  parts.push([0.30, clamp((s.pctVs200 + 20) / 30 * 100)]);     // -20%→0, +10%→100
+    if (s.marketCap != null && s.marketCap > 0) parts.push([0.20, clamp((Math.log10(s.marketCap) - 9) / 3.5 * 100)]); // $1B→0, ~$3.2T→100
+    if (s.avgVolume != null && s.avgVolume > 0) parts.push([0.10, clamp((Math.log10(s.avgVolume) - 5) / 3 * 100)]);   // 100k→0, 100M→100
+    if (!parts.length) return null;
+    const wSum = parts.reduce((a, p) => a + p[0], 0);
+    return Math.round(parts.reduce((a, p) => a + p[0] * p[1], 0) / wSum);
+  }
+
+  function tierOf(score) {
+    if (score == null) return { cls: "", lbl: "—" };
+    if (score >= 70) return { cls: "tier-strong", lbl: "Strong" };
+    if (score >= 50) return { cls: "tier-fair",   lbl: "Fair" };
+    if (score >= 30) return { cls: "tier-weak",   lbl: "Weak" };
+    return { cls: "tier-poor", lbl: "Poor" };
+  }
 
   const state = {
     maxRsi: 30,
     query: "",
     qualityOnly: false,
-    sortKey: "marketCap",
+    sortKey: "score",
     sortDir: -1, // -1 desc, 1 asc
   };
 
   const DATA = (window.STOCK_DATA && window.STOCK_DATA.stocks) || [];
+  DATA.forEach(s => { s.score = scoreStock(s); });
 
   // ---- rendering --------------------------------------------------------
   function apply() {
@@ -204,9 +270,13 @@
       const pct = s.pctVs200;
       const pctCell = pct == null ? "—"
         : `<span class="${pct >= 0 ? "pos" : "neg"}">${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%</span>`;
-      return `<tr>
+      const t = tierOf(s.score);
+      const scoreCell = s.score == null ? "—"
+        : `<span class="tier"><span class="dot"></span><span class="lbl">${t.lbl}</span><span class="sc">${s.score}</span></span>`;
+      return `<tr class="${t.cls}">
         <td class="tk">${s.ticker}</td>
         <td class="name">${s.name || ""}</td>
+        <td>${scoreCell}</td>
         <td class="num">${fmtPrice(s.price)}</td>
         <td class="num"><span class="badge ${rsiClass(s.rsi)}">${s.rsi.toFixed(1)}</span></td>
         <td class="num">${fmtCap(s.marketCap)}</td>
