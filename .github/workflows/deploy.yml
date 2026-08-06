@@ -62,10 +62,19 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install yfinance pandas
+        run: pip install yfinance pandas requests
 
       - name: Fetch data & compute RSI
-        run: python fetch_data.py --keep-all
+        env:
+          MASSIVE_TOKEN: ${{ secrets.MASSIVE_TOKEN }}
+        run: |
+          if [ -n "$MASSIVE_TOKEN" ]; then
+            echo "MASSIVE_TOKEN present — fetching via the Massive Web Render API."
+            python fetch_data_massive.py --keep-all
+          else
+            echo "No MASSIVE_TOKEN secret — fetching directly from Yahoo Finance."
+            python fetch_data.py --keep-all
+          fi
 
       - name: Commit refreshed data.js (triggers Vercel redeploy)
         run: |

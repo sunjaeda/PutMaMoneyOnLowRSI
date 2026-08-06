@@ -37,6 +37,28 @@ python fetch_data.py --keep-all      # keep every ticker; filter live in the pag
 
 **To refresh prices**, just re-run `python fetch_data.py` and reload the page.
 
+### Alternative fetcher: Massive Web Render API
+
+If a network blocks Yahoo, or you'd rather route requests through a proper
+web-access service, `fetch_data_massive.py` does the same job through
+[Massive](https://joinmassive.com). Massive fetches the data server-side (from a
+residential IP, handling JS/anti-bot/geo) and returns the body; the script pulls
+price history (for RSI/200-DMA/volume) and the quote page (for market cap),
+writing the identical `data.js`.
+
+```bash
+pip install requests
+export MASSIVE_TOKEN="your-token"     # from dashboard.joinmassive.com → Developer → API Keys
+python fetch_data_massive.py --keep-all
+```
+
+> **Never commit the token.** It's read only from the `MASSIVE_TOKEN`
+> environment variable. In the GitHub Actions workflow, add it as a repository
+> **Secret** named `MASSIVE_TOKEN` (Settings → Secrets and variables → Actions →
+> New repository secret). When that secret exists the workflow uses Massive
+> automatically; otherwise it falls back to the direct Yahoo fetch. If a token
+> is ever exposed, rotate it in the Massive dashboard.
+
 > Why the Python step? Browsers block direct calls to Yahoo Finance (CORS), and
 > Yahoo has no official public API. Letting a tiny script fetch the data — and
 > having the page read a local file — sidesteps all of that with zero servers to

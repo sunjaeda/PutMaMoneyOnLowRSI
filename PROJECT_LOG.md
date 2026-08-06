@@ -137,8 +137,19 @@ a public webpage. MCP is a bridge for Claude *during a session*; a deployed page
 has no Claude behind it. Making it live would require building/hosting an app
 that calls the Claude API — coding + server + cost.
 
-**Status:** user chose **"just explain, don't build yet."** No data-source
-change has been made. Decision still open.
+**Built:** `fetch_data_massive.py` — an alternative fetcher that uses the
+**Massive Web Render API** (`render.joinmassive.com/browser`, `Authorization:
+Bearer`) as the access layer: it fetches Yahoo's history JSON (`format=raw`) and
+the quote page (`format=markdown`) server-side and writes the same `data.js`.
+The workflow uses Massive automatically when a `MASSIVE_TOKEN` repo secret is
+set, else falls back to the direct Yahoo fetch. Token is env-only, never
+committed. Offline logic (RSI, market-cap parsing) is unit-tested; the live
+network path can't run in the sandbox (blocked) but works in Actions / locally.
+
+**Note:** Massive is web-access infrastructure, not a native quote provider — it
+still pulls from Yahoo underneath, just server-side. A native JSON API (FMP /
+Twelve Data) or Google Sheets remains available if a non-Yahoo *source* is
+wanted later.
 
 ---
 
