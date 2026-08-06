@@ -1,44 +1,42 @@
 #!/usr/bin/env python3
 """
-fetch_data_massive.py — build data.js using the Massive Web Render API as the
-data-access layer instead of calling Yahoo Finance directly.
+fetch_data_massive.py — build data.js from the Massive stock-market data API
+(https://massive.com), a native JSON market-data provider (base api.massive.com,
+Polygon.io-compatible). This replaces Yahoo entirely: no scraping, structured data.
 
-Massive (https://joinmassive.com) is a web-access/proxy service: you hand it a
-URL and it fetches the page server-side from a residential IP, handling
-JS/anti-bot/geo, and returns the body. We use it two ways per ticker:
+Per ticker it makes two REST calls:
+  1. /v2/aggs/ticker/{t}/range/1/day/{from}/{to}   -> daily OHLCV -> RSI, 200-DMA, volume
+  2. /v3/reference/tickers/{t}                      -> market cap, name, sector
 
-  1. format=raw      on Yahoo's price-history JSON endpoint  -> RSI, 200-DMA, volume
-  2. format=markdown on the Yahoo quote page                 -> market cap, sector
-
-The output is the same window.STOCK_DATA shape that index.html already reads, so
-nothing on the page changes.
+Output is the same window.STOCK_DATA shape index.html already reads.
 
 Requirements:
     pip install requests
 
-The API token is read from the MASSIVE_TOKEN environment variable — never hard-code
-it and never commit it. Get/rotate it at dashboard.joinmassive.com -> Developer -> API Keys.
+The API key is read from MASSIVE_TOKEN — never hard-code or commit it. Get/rotate
+it at massive.com/dashboard.
 
-    export MASSIVE_TOKEN="your-token"        # macOS/Linux
-    python fetch_data_massive.py             # RSI <= 30
-    python fetch_data_massive.py --keep-all  # keep every ticker; filter in the page
+    export MASSIVE_TOKEN="your-key"
+    python fetch_data_massive.py --keep-all
+    python fetch_data_massive.py --sleep 0.1      # faster, for a paid (higher-rate) key
+
+Free tiers are usually rate-limited (~5 requests/min) and end-of-day — the default
+--sleep throttles to stay under that. Lower it if your plan allows.
 """
 
 import argparse
 import datetime as dt
 import json
 import os
-import re
 import sys
 import time
-import urllib.parse
 
 try:
     import requests
 except ImportError:
     sys.exit("Missing dep. Run:  pip install requests")
 
-MASSIVE_ENDPOINT = "https://render.joinmassive.com/browser"
+API_BASE = "https://api.massive.com"
 TOKEN = os.environ.get("MASSIVE_TOKEN")
 
 # Same default universe as fetch_data.py — edit freely, or pass --tickers.
@@ -53,16 +51,19 @@ DEFAULT_UNIVERSE = [
 ]
 
 
-def massive_fetch(target_url: str, fmt: str = "raw", geo: str = "US") -> str:
-    """Fetch a URL through Massive and return the response body as text."""
-    resp = requests.get(
-        MASSIVE_ENDPOINT,
-        params={"url": target_url, "format": fmt, "geo": geo},
-        headers={"Authorization": f"Bearer {TOKEN}"},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    return resp.text
+def api_get(path: str, params: dict | None = None, retries: int = 4) -> dict:
+    """GET a Massive REST endpoint with Bearer auth and simple 429 backoff."""
+    url = API_BASE + path
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    for attempt in range(retries):
+        r = requests.get(url, params=params or {}, headers=headers, timeout=30)
+        if r.status_code == 429:                     # rate limited — back off
+            time.sleep(2 ** attempt * 5)
+            continue
+        r.raise_for_status()
+        return r.json()
+    r.raise_for_status()
+    return r.json()
 
 
 def wilder_rsi(closes, period: int = 14):
@@ -85,43 +86,18 @@ def wilder_rsi(closes, period: int = 14):
     return round(100 - (100 / (1 + rs)), 2)
 
 
-def parse_market_cap(markdown: str):
-    """Pull 'Market Cap' from the Yahoo quote page markdown, e.g. '3.27T' -> 3.27e12."""
-    m = re.search(r"Market Cap[^0-9]{0,20}([0-9][0-9.,]*)\s*([TBMK]?)", markdown, re.I)
-    if not m:
-        return None
-    num = float(m.group(1).replace(",", ""))
-    mult = {"T": 1e12, "B": 1e9, "M": 1e6, "K": 1e3, "": 1.0}[m.group(2).upper()]
-    return num * mult
-
-
-def parse_sector(markdown: str):
-    m = re.search(r"Sector[^A-Za-z]{0,10}([A-Z][A-Za-z ]{2,40})", markdown)
-    return m.group(1).strip() if m else "—"
-
-
-def _extract_json(text: str):
-    """Massive's raw mode should return the body verbatim; be defensive anyway."""
-    try:
-        return json.loads(text)
-    except Exception:
-        i, j = text.find("{"), text.rfind("}")
-        if i != -1 and j != -1:
-            return json.loads(text[i:j + 1])
-        raise
-
-
 def analyze(ticker: str):
-    # 1) Price history via Yahoo's chart JSON, fetched through Massive.
-    chart_url = (
-        f"https://query1.finance.yahoo.com/v8/finance/chart/"
-        f"{urllib.parse.quote(ticker)}?range=1y&interval=1d"
+    # 1) ~15 months of daily bars, oldest first.
+    today = dt.date.today()
+    frm = (today - dt.timedelta(days=460)).isoformat()
+    to = today.isoformat()
+    aggs = api_get(
+        f"/v2/aggs/ticker/{ticker}/range/1/day/{frm}/{to}",
+        {"adjusted": "true", "sort": "asc", "limit": 50000},
     )
-    data = _extract_json(massive_fetch(chart_url, fmt="raw"))
-    result = data["chart"]["result"][0]
-    quote = result["indicators"]["quote"][0]
-    closes = [c for c in quote.get("close", []) if c is not None]
-    vols = [v for v in quote.get("volume", []) if v is not None]
+    results = aggs.get("results") or []
+    closes = [b["c"] for b in results if b.get("c") is not None]
+    vols = [b["v"] for b in results if b.get("v") is not None]
     if len(closes) < 30:
         return None
 
@@ -133,18 +109,19 @@ def analyze(ticker: str):
     pct_vs_200 = round((price / ma200 - 1) * 100, 1) if ma200 else None
     avg_vol = int(sum(vols[-20:]) / min(len(vols), 20)) if vols else None
 
-    # 2) Market cap + sector from the quote page markdown, fetched through Massive.
-    market_cap, sector = None, "—"
+    # 2) Reference details for market cap / name / sector (best-effort).
+    name, market_cap, sector = ticker, None, "—"
     try:
-        md = massive_fetch(f"https://finance.yahoo.com/quote/{ticker}/", fmt="markdown")
-        market_cap = parse_market_cap(md)
-        sector = parse_sector(md)
+        det = api_get(f"/v3/reference/tickers/{ticker}").get("results", {}) or {}
+        name = det.get("name") or ticker
+        market_cap = det.get("market_cap")
+        sector = det.get("sic_description") or "—"
     except Exception:
-        pass  # history is enough to score; market cap is a bonus column
+        pass
 
     return {
         "ticker": ticker,
-        "name": result["meta"].get("shortName") or ticker,
+        "name": name,
         "price": price,
         "rsi": rsi,
         "marketCap": market_cap,
@@ -159,15 +136,17 @@ def main():
     if not TOKEN:
         sys.exit("Set MASSIVE_TOKEN in your environment first (never commit it).")
 
-    ap = argparse.ArgumentParser(description="Screen stocks by RSI(14) via the Massive Web Render API.")
+    ap = argparse.ArgumentParser(description="Screen stocks by RSI(14) from the Massive market-data API.")
     ap.add_argument("--rsi", type=float, default=30, help="Max RSI to keep (default 30).")
     ap.add_argument("--tickers", nargs="+", help="Custom ticker list.")
     ap.add_argument("--keep-all", action="store_true", help="Write all tickers; filter in the page.")
+    ap.add_argument("--sleep", type=float, default=13.0,
+                    help="Seconds between tickers (default 13 to respect free ~5/min tiers).")
     ap.add_argument("--out", default="data.js", help="Output file (default data.js).")
     args = ap.parse_args()
 
     universe = args.tickers or DEFAULT_UNIVERSE
-    print(f"Fetching {len(universe)} tickers via Massive...")
+    print(f"Fetching {len(universe)} tickers from the Massive API...")
 
     rows = []
     for i, tk in enumerate(universe, 1):
@@ -178,11 +157,12 @@ def main():
             continue
         if row is None:
             print(f"  [{i}/{len(universe)}] {tk}: no usable data")
-            continue
-        flag = "OVERSOLD" if row["rsi"] <= args.rsi else ""
-        print(f"  [{i}/{len(universe)}] {tk}: RSI={row['rsi']} {flag}")
-        rows.append(row)
-        time.sleep(0.2)  # be polite to the API
+        else:
+            flag = "OVERSOLD" if row["rsi"] <= args.rsi else ""
+            print(f"  [{i}/{len(universe)}] {tk}: RSI={row['rsi']} {flag}")
+            rows.append(row)
+        if i < len(universe):
+            time.sleep(args.sleep)
 
     if not args.keep_all:
         rows = [r for r in rows if r["rsi"] <= args.rsi]
@@ -193,7 +173,7 @@ def main():
         "generatedAt": dt.datetime.now().isoformat(timespec="seconds"),
         "rsiThreshold": args.rsi,
         "universeSize": len(universe),
-        "source": "massive",
+        "source": "massive.com",
         "stocks": rows,
     }
     with open(args.out, "w") as f:

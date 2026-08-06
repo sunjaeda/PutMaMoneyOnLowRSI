@@ -37,27 +37,30 @@ python fetch_data.py --keep-all      # keep every ticker; filter live in the pag
 
 **To refresh prices**, just re-run `python fetch_data.py` and reload the page.
 
-### Alternative fetcher: Massive Web Render API
+### Alternative fetcher: Massive market-data API (recommended, not Yahoo)
 
-If a network blocks Yahoo, or you'd rather route requests through a proper
-web-access service, `fetch_data_massive.py` does the same job through
-[Massive](https://joinmassive.com). Massive fetches the data server-side (from a
-residential IP, handling JS/anti-bot/geo) and returns the body; the script pulls
-price history (for RSI/200-DMA/volume) and the quote page (for market cap),
-writing the identical `data.js`.
+`fetch_data_massive.py` pulls from [Massive](https://massive.com) — a native
+stock-market data API (base `api.massive.com`, Bearer auth, Polygon.io-
+compatible). This drops Yahoo entirely: structured JSON, no scraping. Per ticker
+it gets daily bars (`/v2/aggs/...`) for RSI/200-DMA/volume and reference details
+(`/v3/reference/tickers/...`) for market cap, writing the identical `data.js`.
 
 ```bash
 pip install requests
-export MASSIVE_TOKEN="your-token"     # from dashboard.joinmassive.com → Developer → API Keys
+export MASSIVE_TOKEN="your-key"          # from massive.com/dashboard
 python fetch_data_massive.py --keep-all
+python fetch_data_massive.py --sleep 0.1 # faster, for a paid (higher-rate) key
 ```
 
-> **Never commit the token.** It's read only from the `MASSIVE_TOKEN`
-> environment variable. In the GitHub Actions workflow, add it as a repository
-> **Secret** named `MASSIVE_TOKEN` (Settings → Secrets and variables → Actions →
-> New repository secret). When that secret exists the workflow uses Massive
-> automatically; otherwise it falls back to the direct Yahoo fetch. If a token
-> is ever exposed, rotate it in the Massive dashboard.
+Free tiers are typically rate-limited (~5 requests/min) and end-of-day, so the
+default `--sleep 13` throttles between tickers; lower it if your plan allows.
+
+> **Never commit the key.** It's read only from the `MASSIVE_TOKEN` environment
+> variable. In GitHub Actions, add it as a repository **Secret** named
+> `MASSIVE_TOKEN` (Settings → Secrets and variables → Actions → New repository
+> secret). When that secret exists the workflow uses Massive automatically;
+> otherwise it falls back to the direct Yahoo fetch. If a key is ever exposed,
+> rotate it at massive.com/dashboard.
 
 > Why the Python step? Browsers block direct calls to Yahoo Finance (CORS), and
 > Yahoo has no official public API. Letting a tiny script fetch the data — and

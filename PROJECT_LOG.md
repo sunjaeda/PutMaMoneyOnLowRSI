@@ -137,19 +137,21 @@ a public webpage. MCP is a bridge for Claude *during a session*; a deployed page
 has no Claude behind it. Making it live would require building/hosting an app
 that calls the Claude API — coding + server + cost.
 
-**Built:** `fetch_data_massive.py` — an alternative fetcher that uses the
-**Massive Web Render API** (`render.joinmassive.com/browser`, `Authorization:
-Bearer`) as the access layer: it fetches Yahoo's history JSON (`format=raw`) and
-the quote page (`format=markdown`) server-side and writes the same `data.js`.
-The workflow uses Massive automatically when a `MASSIVE_TOKEN` repo secret is
-set, else falls back to the direct Yahoo fetch. Token is env-only, never
-committed. Offline logic (RSI, market-cap parsing) is unit-tested; the live
-network path can't run in the sandbox (blocked) but works in Actions / locally.
+**Built:** `fetch_data_massive.py` — a fetcher using the **Massive market-data
+API** (`massive.com`; base `api.massive.com`, Bearer auth, Polygon.io-
+compatible). Drops Yahoo entirely: per ticker it calls `/v2/aggs/...` for daily
+bars (RSI/200-DMA/volume) and `/v3/reference/tickers/...` for market cap/name/
+sector, writing the same `data.js`. The workflow uses Massive automatically when
+a `MASSIVE_TOKEN` repo secret is set, else falls back to the direct Yahoo fetch.
+Key is env-only, never committed. Pure-Python RSI is unit-tested; live network
+path can't run in the sandbox (blocked) but works in Actions / locally.
 
-**Note:** Massive is web-access infrastructure, not a native quote provider — it
-still pulls from Yahoo underneath, just server-side. A native JSON API (FMP /
-Twelve Data) or Google Sheets remains available if a non-Yahoo *source* is
-wanted later.
+**Rate limits:** free tiers ~5 req/min and end-of-day, so the script throttles
+with `--sleep` (default 13s between tickers; lower for paid keys).
+
+**History note:** an earlier version mistakenly targeted a *different* company,
+`joinmassive.com` (a web-proxy service). Corrected to `massive.com`, the actual
+stock-data API — a much better fit.
 
 ---
 

@@ -69,7 +69,7 @@ jobs:
           MASSIVE_TOKEN: ${{ secrets.MASSIVE_TOKEN }}
         run: |
           if [ -n "$MASSIVE_TOKEN" ]; then
-            echo "MASSIVE_TOKEN present — fetching via the Massive Web Render API."
+            echo "MASSIVE_TOKEN present — fetching from the Massive market-data API."
             python fetch_data_massive.py --keep-all
           else
             echo "No MASSIVE_TOKEN secret — fetching directly from Yahoo Finance."
