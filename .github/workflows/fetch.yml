@@ -1,0 +1,46 @@
+name: Fetch stock data (manual)
+
+# Manual only — runs when YOU click "Run workflow" in the Actions tab.
+# No schedule. Runs the fetcher in GitHub's cloud (no local Python needed),
+# using the MASSIVE_TOKEN repository secret, and commits the refreshed data.js.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to commit the refreshed data.js back to the repo
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch data & compute RSI (Massive)
+        env:
+          MASSIVE_TOKEN: ${{ secrets.MASSIVE_TOKEN }}
+        run: |
+          if [ -z "$MASSIVE_TOKEN" ]; then
+            echo "::error::MASSIVE_TOKEN secret is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          python fetch_data.py --keep-all
+
+      - name: Commit refreshed data.js
+        run: |
+          if git diff --quiet -- data.js; then
+            echo "data.js unchanged — nothing to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data.js
+            git commit -m "chore: refresh stock data [skip ci]"
+            git push
+          fi
