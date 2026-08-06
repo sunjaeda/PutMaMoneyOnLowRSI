@@ -81,7 +81,7 @@ def analyze(ticker: str):
 
     price = round(float(closes.iloc[-1]), 2)
     ma200 = closes.rolling(200).mean().iloc[-1]
-    pct_vs_200 = round((price / ma200 - 1) * 100, 1) if pd.notna(ma200) else None
+    pct_vs_200 = round(float(price / ma200 - 1) * 100, 1) if pd.notna(ma200) else None
     avg_vol = int(hist["Volume"].tail(20).mean()) if "Volume" in hist else None
 
     # .info can be slow/flaky; guard it.
@@ -90,16 +90,20 @@ def analyze(ticker: str):
     except Exception:
         info = {}
 
+    market_cap = info.get("marketCap")
+
+    # Cast to native Python types — pandas/NumPy scalars (esp. numpy.bool_) are
+    # not JSON-serializable and would crash json.dump.
     return {
         "ticker": ticker,
         "name": info.get("shortName") or info.get("longName") or ticker,
-        "price": price,
-        "rsi": rsi,
-        "marketCap": info.get("marketCap"),
+        "price": float(price),
+        "rsi": float(rsi),
+        "marketCap": int(market_cap) if market_cap is not None else None,
         "sector": info.get("sector") or "—",
-        "pctVs200": pct_vs_200,
-        "avgVolume": avg_vol,
-        "aboveMA200": (pct_vs_200 is not None and pct_vs_200 > 0),
+        "pctVs200": float(pct_vs_200) if pct_vs_200 is not None else None,
+        "avgVolume": int(avg_vol) if avg_vol is not None else None,
+        "aboveMA200": bool(pct_vs_200 is not None and pct_vs_200 > 0),
     }
 
 
