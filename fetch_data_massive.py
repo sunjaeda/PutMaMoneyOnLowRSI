@@ -38,16 +38,14 @@ except ImportError:
 
 API_BASE = "https://api.massive.com"
 TOKEN = os.environ.get("MASSIVE_TOKEN")
+CALL_SLEEP = 0.0  # seconds paused after each API call (set from --sleep to respect rate limits)
 
-# Same default universe as fetch_data.py — edit freely, or pass --tickers.
+# Top ~30 S&P 500 names by market cap (approximate, as of 2026 — easily edited,
+# or pass --tickers). Massive uses Polygon-style tickers (e.g. BRK.B, not BRK-B).
 DEFAULT_UNIVERSE = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "V", "UNH",
-    "XOM", "JNJ", "WMT", "MA", "PG", "HD", "CVX", "ABBV", "KO", "PEP", "COST",
-    "MRK", "ADBE", "CRM", "BAC", "PFE", "TMO", "MCD", "CSCO", "ACN", "ABT",
-    "DHR", "NKE", "TXN", "DIS", "WFC", "PM", "VZ", "INTC", "AMD", "QCOM", "IBM",
-    "GE", "CAT", "HON", "UNP", "LOW", "BA", "SBUX", "GS", "MS", "BLK", "AXP",
-    "T", "C", "CVS", "AMGN", "INTU", "SPGI", "NOW", "ISRG", "GILD", "MDT",
-    "BKNG", "PLD", "SYK", "TJX", "MDLZ", "REGN", "VRTX", "TGT", "EL", "PARA",
+    "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK.B",
+    "JPM", "LLY", "V", "XOM", "MA", "COST", "WMT", "UNH", "HD", "PG", "JNJ",
+    "NFLX", "ABBV", "BAC", "ORCL", "CVX", "KO", "CRM", "AMD", "PLTR", "MRK",
 ]
 
 
@@ -61,6 +59,8 @@ def api_get(path: str, params: dict | None = None, retries: int = 4) -> dict:
             time.sleep(2 ** attempt * 5)
             continue
         r.raise_for_status()
+        if CALL_SLEEP:
+            time.sleep(CALL_SLEEP)                    # throttle to stay under the plan's rate limit
         return r.json()
     r.raise_for_status()
     return r.json()
@@ -141,9 +141,13 @@ def main():
     ap.add_argument("--tickers", nargs="+", help="Custom ticker list.")
     ap.add_argument("--keep-all", action="store_true", help="Write all tickers; filter in the page.")
     ap.add_argument("--sleep", type=float, default=13.0,
-                    help="Seconds between tickers (default 13 to respect free ~5/min tiers).")
+                    help="Seconds paused after each API call (default 13). Each ticker makes 2 "
+                         "calls, so 13s keeps a free ~5/min tier safe. Lower it for paid keys.")
     ap.add_argument("--out", default="data.js", help="Output file (default data.js).")
     args = ap.parse_args()
+
+    global CALL_SLEEP
+    CALL_SLEEP = args.sleep
 
     universe = args.tickers or DEFAULT_UNIVERSE
     print(f"Fetching {len(universe)} tickers from the Massive API...")
@@ -161,8 +165,6 @@ def main():
             flag = "OVERSOLD" if row["rsi"] <= args.rsi else ""
             print(f"  [{i}/{len(universe)}] {tk}: RSI={row['rsi']} {flag}")
             rows.append(row)
-        if i < len(universe):
-            time.sleep(args.sleep)
 
     if not args.keep_all:
         rows = [r for r in rows if r["rsi"] <= args.rsi]

@@ -52,8 +52,11 @@ python fetch_data_massive.py --keep-all
 python fetch_data_massive.py --sleep 0.1 # faster, for a paid (higher-rate) key
 ```
 
-Free tiers are typically rate-limited (~5 requests/min) and end-of-day, so the
-default `--sleep 13` throttles between tickers; lower it if your plan allows.
+Free tiers are typically rate-limited (~5 requests/min) and end-of-day. Each
+ticker makes 2 calls, so the default `--sleep 13` pauses after every call to stay
+safe — about **13 minutes for the top-30 universe**. Lower it (e.g. `--sleep 0.1`)
+if your plan allows, or shrink the universe. The default universe is the **top
+~30 S&P 500 names by market cap**, set in `DEFAULT_UNIVERSE`.
 
 > **Never commit the key.** It's read only from the `MASSIVE_TOKEN` environment
 > variable. In GitHub Actions, add it as a repository **Secret** named

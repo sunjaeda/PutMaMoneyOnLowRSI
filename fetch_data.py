@@ -30,16 +30,12 @@ except ImportError:
     sys.exit("Missing deps. Run:  pip install yfinance pandas")
 
 
-# A default universe of large, liquid US names. Edit freely, or pass --tickers.
+# Top ~30 S&P 500 names by market cap (approximate, as of 2026 — easily edited,
+# or pass --tickers). Yahoo uses BRK-B (not BRK.B).
 DEFAULT_UNIVERSE = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "JPM",
-    "V", "UNH", "XOM", "JNJ", "WMT", "MA", "PG", "HD", "CVX", "ABBV", "KO",
-    "PEP", "COST", "MRK", "ADBE", "CRM", "BAC", "PFE", "TMO", "MCD", "CSCO",
-    "ACN", "ABT", "DHR", "LIN", "NKE", "TXN", "DIS", "WFC", "PM", "VZ",
-    "INTC", "AMD", "QCOM", "IBM", "GE", "CAT", "HON", "UNP", "LOW", "BA",
-    "SBUX", "GS", "MS", "BLK", "AXP", "T", "C", "CVS", "AMGN", "INTU",
-    "SPGI", "NOW", "ISRG", "GILD", "MDT", "BKNG", "ADI", "PLD", "SYK", "TJX",
-    "MDLZ", "REGN", "VRTX", "PANW", "CB", "SO", "MMC", "ZTS", "ADP", "CME",
+    "NVDA", "MSFT", "AAPL", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK-B",
+    "JPM", "LLY", "V", "XOM", "MA", "COST", "WMT", "UNH", "HD", "PG", "JNJ",
+    "NFLX", "ABBV", "BAC", "ORCL", "CVX", "KO", "CRM", "AMD", "PLTR", "MRK",
 ]
 
 
